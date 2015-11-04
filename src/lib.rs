@@ -21,8 +21,11 @@ pub use prop::PropHandler;
 pub use prop::Props;
 pub use watch::Watch;
 
-/// A TypeSig describes the type of a MessageItem.
+/// A TypeSig describes the raw type of a MessageItem.
 pub type TypeSig<'a> = std::borrow::Cow<'a, str>;
+
+/// An ItemType is a user-friendly enumeration for representing `TypeSig`s
+pub use message::ItemType;
 
 use std::ffi::{CString, CStr};
 use std::ptr::{self};

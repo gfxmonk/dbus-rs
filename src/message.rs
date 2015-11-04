@@ -164,27 +164,76 @@ fn iter_append_dict(i: &mut ffi::DBusMessageIter, k: &MessageItem, v: &MessageIt
     assert!(unsafe { ffi::dbus_message_iter_close_container(i, &mut subiter) } != 0);
 }
 
+
+pub enum ItemType {
+    Array(Box<ItemType>),
+    Struct(Vec<ItemType>),
+    Variant,
+    DictEntry(Box<ItemType>, Box<ItemType>),
+    ObjectPath,
+    Str,
+    Bool,
+    Byte,
+    Int16,
+    Int32,
+    Int64,
+    UInt16,
+    UInt32,
+    UInt64,
+    Double,
+    UnixFd,
+    Raw(TypeSig<'static>),
+}
+
+impl ItemType {
+    fn type_sig(&self) -> TypeSig<'static> {
+        match self {
+            // TODO: Can we make use of the ffi constants here instead of duplicating them?
+            &ItemType::Str => Cow::Borrowed("s"),
+            &ItemType::Bool => Cow::Borrowed("b"),
+            &ItemType::Byte => Cow::Borrowed("y"),
+            &ItemType::Int16 => Cow::Borrowed("n"),
+            &ItemType::Int32 => Cow::Borrowed("i"),
+            &ItemType::Int64 => Cow::Borrowed("x"),
+            &ItemType::UInt16 => Cow::Borrowed("q"),
+            &ItemType::UInt32 => Cow::Borrowed("u"),
+            &ItemType::UInt64 => Cow::Borrowed("t"),
+            &ItemType::Double => Cow::Borrowed("d"),
+            &ItemType::Array(ref s) => Cow::Owned(format!("a{}", s.type_sig())),
+            &ItemType::Struct(ref s) => Cow::Owned(format!("({})", s.iter().fold(String::new(), |s, i| s + &*i.type_sig()))),
+            &ItemType::Variant => Cow::Borrowed("v"),
+            &ItemType::DictEntry(ref k, ref v) => Cow::Owned(format!("{{{}{}}}", k.type_sig(), v.type_sig())),
+            &ItemType::ObjectPath => Cow::Borrowed("o"),
+            &ItemType::UnixFd => Cow::Borrowed("h"),
+            &ItemType::Raw(ref s) => s.clone(),
+        }
+    }
+}
+
 impl MessageItem {
 
     pub fn type_sig(&self) -> TypeSig<'static> {
+        self.item_type().type_sig()
+    }
+
+    fn item_type(&self) -> ItemType {
         match self {
-            // TODO: Can we make use of the ffi constants here instead of duplicating them?
-            &MessageItem::Str(_) => Cow::Borrowed("s"),
-            &MessageItem::Bool(_) => Cow::Borrowed("b"),
-            &MessageItem::Byte(_) => Cow::Borrowed("y"),
-            &MessageItem::Int16(_) => Cow::Borrowed("n"),
-            &MessageItem::Int32(_) => Cow::Borrowed("i"),
-            &MessageItem::Int64(_) => Cow::Borrowed("x"),
-            &MessageItem::UInt16(_) => Cow::Borrowed("q"),
-            &MessageItem::UInt32(_) => Cow::Borrowed("u"),
-            &MessageItem::UInt64(_) => Cow::Borrowed("t"),
-            &MessageItem::Double(_) => Cow::Borrowed("d"),
-            &MessageItem::Array(_, ref s) => Cow::Owned(format!("a{}", s)),
-            &MessageItem::Struct(ref s) => Cow::Owned(format!("({})", s.iter().fold(String::new(), |s, i| s + &*i.type_sig()))),
-            &MessageItem::Variant(_) => Cow::Borrowed("v"),
-            &MessageItem::DictEntry(ref k, ref v) => Cow::Owned(format!("{{{}{}}}", k.type_sig(), v.type_sig())),
-            &MessageItem::ObjectPath(_) => Cow::Borrowed("o"),
-            &MessageItem::UnixFd(_) => Cow::Borrowed("h"),
+            &MessageItem::Str(_) => ItemType::Str,
+            &MessageItem::Bool(_) => ItemType::Bool,
+            &MessageItem::Byte(_) => ItemType::Byte,
+            &MessageItem::Int16(_) => ItemType::Int16,
+            &MessageItem::Int32(_) => ItemType::Int32,
+            &MessageItem::Int64(_) => ItemType::Int64,
+            &MessageItem::UInt16(_) => ItemType::UInt16,
+            &MessageItem::UInt32(_) => ItemType::UInt32,
+            &MessageItem::UInt64(_) => ItemType::UInt64,
+            &MessageItem::Double(_) => ItemType::Double,
+            &MessageItem::Array(_, ref s) => ItemType::Array(Box::new(ItemType::Raw(s.clone()))),
+            &MessageItem::Struct(ref s) => ItemType::Struct(s.iter().map(|s| s.item_type()).collect()),
+            &MessageItem::Variant(_) => ItemType::Variant,
+            &MessageItem::DictEntry(ref k, ref v) => ItemType::DictEntry(Box::new(k.item_type()), Box::new(v.item_type())),
+            &MessageItem::ObjectPath(_) => ItemType::ObjectPath,
+            &MessageItem::UnixFd(_) => ItemType::UnixFd,
         }
     }
 
