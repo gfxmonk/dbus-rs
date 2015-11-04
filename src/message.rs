@@ -285,6 +285,9 @@ impl MessageItem {
         Ok(MessageItem::Array(v, t))
     }
 
+    pub fn empty_array(t: ItemType) -> MessageItem {
+        MessageItem::Array(vec!(), t.type_sig())
+    }
 
     fn new_array2<D, I>(i: I) -> MessageItem
     where D: Into<MessageItem>, D: Default, I: Iterator<Item=D> {
